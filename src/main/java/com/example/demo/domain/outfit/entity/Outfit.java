@@ -1,6 +1,7 @@
 package com.example.demo.domain.outfit.entity;
 
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import jakarta.persistence.*;
@@ -34,4 +35,14 @@ public class Outfit extends BaseTimeEntity {
 
     private String name;
     private String previewUrl; // 캔버스 캡처 이미지
+
+    @Builder // 생성 시 shoes가 없으면 생략 가능
+    public Outfit(Member member, Clothes top, Clothes bottom, Clothes shoes, String name, String previewUrl) {
+        this.member = member;
+        this.top = top;
+        this.bottom = bottom;
+        this.shoes = shoes;
+        this.name = name;
+        this.previewUrl = previewUrl;
+    }
 }
