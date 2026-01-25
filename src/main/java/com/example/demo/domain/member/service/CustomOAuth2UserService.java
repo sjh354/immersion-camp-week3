@@ -13,6 +13,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import com.example.demo.domain.member.repository.MemberRepository;
 import com.example.demo.domain.member.entity.AuthProvider;
 import com.example.demo.domain.member.entity.Member;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -28,13 +29,14 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         String providerId = (String) attributes.get("sub");
 
         // 기존 회원이 아니면 자동 가입 (Provider: GOOGLE)
-        memberRepository.findByEmail(email)
-                .orElseGet(() -> memberRepository.save(Member.builder()
-                        .email(email)
-                        .nickname("Temporary_Name") // 최초 가입 시 임시 닉네임
-                        .provider(AuthProvider.GOOGLE)
-                        .providerId(providerId)
-                        .build()));
+        if (memberRepository.findByEmail(email).isEmpty()) {
+            memberRepository.save(Objects.requireNonNull(Member.builder()
+                    .email(email)
+                    .nickname("Temporary_Name") // 최초 가입 시 임시 닉네임
+                    .provider(AuthProvider.GOOGLE)
+                    .providerId(providerId)
+                    .build()));
+        }
 
         return new DefaultOAuth2User(
                 Collections.singleton(new SimpleGrantedAuthority("ROLE_USER")),

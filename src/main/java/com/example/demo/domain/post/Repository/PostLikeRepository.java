@@ -1,4 +1,4 @@
-package com.example.demo.domain.post.Repository;
+package com.example.demo.domain.post.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import com.example.demo.domain.post.entity.PostLike;

@@ -1,4 +1,4 @@
-package com.example.demo.domain.battle.Repository;
+package com.example.demo.domain.battle.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
