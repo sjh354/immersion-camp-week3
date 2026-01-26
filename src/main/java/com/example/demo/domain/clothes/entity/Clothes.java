@@ -3,11 +3,15 @@ package com.example.demo.domain.clothes.entity;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import jakarta.persistence.*;
 import com.example.demo.global.common.BaseTimeEntity;
 
 @Entity
 @Getter
+@Builder
+@AllArgsConstructor
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Clothes extends BaseTimeEntity {
     @Id

@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import com.example.demo.global.common.BaseTimeEntity;
 import com.example.demo.domain.member.entity.Member;
 import com.example.demo.domain.clothes.entity.Clothes;
+import java.util.Objects;
 
 @Entity
 @Getter
@@ -30,18 +31,18 @@ public class Outfit extends BaseTimeEntity {
     private Clothes bottom;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "shoes_id")
-    private Clothes shoes;
+    @JoinColumn(name = "outer_id")
+    private Clothes outer;
 
     private String name;
     private String previewUrl; // 캔버스 캡처 이미지
 
-    @Builder // 생성 시 shoes가 없으면 생략 가능
-    public Outfit(Member member, Clothes top, Clothes bottom, Clothes shoes, String name, String previewUrl) {
+    @Builder // 생성 시 top, bottom은 필수, outer는 선택
+    public Outfit(Member member, Clothes top, Clothes bottom, Clothes outer, String name, String previewUrl) {
         this.member = member;
-        this.top = top;
-        this.bottom = bottom;
-        this.shoes = shoes;
+        this.top = Objects.requireNonNull(top, "Top must not be null");
+        this.bottom = Objects.requireNonNull(bottom, "Bottom must not be null");
+        this.outer = outer; // Nullable
         this.name = name;
         this.previewUrl = previewUrl;
     }

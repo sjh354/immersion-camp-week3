@@ -7,7 +7,7 @@ spring:
     include: secret
 
   datasource:
-    url: jdbc:mariadb://13.209.6.120:3306/fashion_game?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false&tcpKeepAlive=true&connectTimeout=60000&socketTimeout=60000
+    url: jdbc:mariadb://13.125.136.73:3306/fashion_game?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false&tcpKeepAlive=true&connectTimeout=60000&socketTimeout=60000
     username: root
     password: 1234
     driver-class-name: org.mariadb.jdbc.Driver
@@ -42,3 +42,15 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
+
+cloud:
+  aws:
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
+    s3:
+      bucket: ${AWS_S3_BUCKET_NAME}
+    region:
+      static: ap-northeast-2
+    stack:
+      auto: false

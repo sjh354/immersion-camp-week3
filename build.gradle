@@ -46,6 +46,15 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+	// AWS SDK (Spring Cloud AWS 사용 시 편리합니다)
+    implementation 'io.awspring.cloud:spring-cloud-starter-aws:2.4.4'
+	// Redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    // WebSocket
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    // JSON 처리를 위한 Jackson (보통 기본 포함)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 }
 
 tasks.named('test') {

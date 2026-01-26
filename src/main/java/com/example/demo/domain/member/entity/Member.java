@@ -45,4 +45,12 @@ public class Member extends BaseTimeEntity {
         this.providerId = providerId;
         this.picture = picture;
     }
+
+    public void incrementWinCount() {
+        this.winCount++;
+    }
+
+    public void incrementLossCount() {
+        this.lossCount++;
+    }
 }
