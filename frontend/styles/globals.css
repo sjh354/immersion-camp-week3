@@ -1,0 +1,36 @@
+@import "./fonts.css";
+@import "./variables.css";
+@import "./tailwind.css";
+@import "./theme.css";
+
+@keyframes login-sun-rise {
+  0% {
+    transform: translate(-230%, 110%) scale(1);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-230%, -270%) scale(2.5);
+    opacity: 1;
+  }
+}
+
+.animate-login-sun {
+  animation: login-sun-rise 2.6s ease-out forwards;
+}
+
+@keyframes login-text-reveal {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    transform: translate(170%, 0%) scale(2);
+    opacity: 0;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(170%, 0%) scale(2);
+    opacity: 1;
+  }
+}
+
+.animate-login-text {
+  animation: login-text-reveal 2s ease-out forwards;
+}
