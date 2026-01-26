@@ -6,6 +6,7 @@ import { Heart, Star, Sparkles } from "lucide-react";
 import { PatternBackground } from "@/_components/PatternBackground";
 import { useAppState } from "@/store/appState";
 import { useAuthGate } from "@/hooks/useAuthGate";
+import { fetchWithAuth } from "@/utils/apiClient";
 
 interface BattleWaitingPageProps {
   username: string;
@@ -20,14 +21,8 @@ function BattleWaitingPage({ username, onReady }: BattleWaitingPageProps) {
       setDots((prev) => (prev.length >= 3 ? "" : prev + "."));
     }, 500);
 
-    // Simulate waiting for opponent (3 seconds for demo)
-    const timer = setTimeout(() => {
-      onReady();
-    }, 3000);
-
     return () => {
       clearInterval(interval);
-      clearTimeout(timer);
     };
   }, [onReady]);
 
@@ -100,7 +95,7 @@ function BattleWaitingPage({ username, onReady }: BattleWaitingPageProps) {
 
 export default function BattleWaitingRoute() {
   const router = useRouter();
-  const { selectedBattleOutfit } = useAppState();
+  const { selectedBattleOutfit, setBattleSessionId } = useAppState();
   useAuthGate();
 
   useEffect(() => {
@@ -109,10 +104,38 @@ export default function BattleWaitingRoute() {
     }
   }, [router, selectedBattleOutfit]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const pollStatus = async () => {
+      try {
+        const res = await fetchWithAuth("/battle/match/status");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          status: "MATCHING" | "MATCHED" | "NONE";
+          sessionId?: number;
+        };
+        if (cancelled) return;
+        if (data.status === "MATCHED" && data.sessionId) {
+          setBattleSessionId(data.sessionId);
+          router.push("/battle/message");
+        }
+      } catch {
+        // ignore for now
+      }
+    };
+
+    pollStatus();
+    const interval = setInterval(pollStatus, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [router, setBattleSessionId]);
+
   return (
     <BattleWaitingPage
       username="플레이어"
-      onReady={() => router.push("/battle/game")}
+      onReady={() => router.push("/battle/message")}
     />
   );
 }

@@ -1,8 +1,10 @@
 from datetime import datetime
 from flask import Flask, jsonify, request
+from flask_sock import Sock
 import json
 
 app = Flask(__name__)
+sock = Sock(app)
 
 with open("./top.json", "r", encoding="utf-8") as f:
     top = json.load(f)
@@ -18,6 +20,15 @@ def now_iso():
 @app.route("/api/test")
 def index():
     return "Hello, World!"
+
+
+@sock.route("/ws")
+def websocket_echo(ws):
+    while True:
+        data = ws.receive()
+        if data is None:
+            break
+        ws.send(data)
 
 
 @app.route("/api/v1/auth/google", methods=["POST"])
@@ -95,7 +106,7 @@ def auth_logout():
 
 @app.route("/api/v1/clothes/categories", methods=["GET"])
 def clothes_categories():
-    return jsonify({"categories": ["TOP", "BOTTOM"]})
+    return jsonify({"categories": ["TOP", "BOTTOM", "OUTER"]})
 
 
 @app.route("/api/v1/clothes", methods=["GET"])
@@ -301,6 +312,29 @@ def posts_like(post_id):
 def posts_comment(post_id):
     return jsonify(
         {"commentId": 5, "nickname": "현유저", "content": "정말 멋지네요!"}
+    )
+
+@app.route("/api/v1/battle/list", methods=["GET"])
+def getbattlelist():
+    return jsonify(
+        {
+      "sessionId": 505,
+        "player1": { "nickname": "123", "previewUrl": "767" },
+        "player2": { "nickname": "456", "previewUrl": "564563" },
+         "voteA": 12,
+    "voteB": 9,
+        "endsIn": "01:20",
+        "spectatorCount": 2
+        },
+        {
+      "sessionId": 506,
+        "player1": { "nickname": "789", "previewUrl": "..." },
+        "player2": { "nickname": "101", "previewUrl": "..." },
+         "voteA": 19,
+    "voteB": 98,
+        "endsIn": "01:00",
+        "spectatorCount": 21
+        }
     )
 
 

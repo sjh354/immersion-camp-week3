@@ -57,19 +57,18 @@ function DraggableClothingItem({ item }: { item: ClothingItem }) {
 function DropZone({
   onDrop,
   outfit,
-  modelImageUrl,
   resultImageUrl,
   isGenerating,
 }: {
   onDrop: (item: ClothingItem) => void;
   outfit: any;
-  modelImageUrl: string;
-  resultImageUrl: string | null;
+  resultImageUrl: string;
   isGenerating: boolean;
 }) {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: "clothing",
     drop: (item: ClothingItem) => {
+      if (isGenerating) return;
       onDrop(item);
     },
     collect: (monitor) => ({
@@ -92,7 +91,7 @@ function DropZone({
     >
       <div className="w-full h-full flex items-center justify-center relative">
         <img
-          src={resultImageUrl || modelImageUrl}
+          src={resultImageUrl}
           alt="try-on preview"
           className="h-full w-full object-contain"
         />
@@ -134,14 +133,15 @@ function DressUpPageContent({
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [isLoadingClothes, setIsLoadingClothes] = useState(false);
   const [clothesError, setClothesError] = useState<string | null>(null);
-  const modelImageUrl =
-    process.env.NEXT_PUBLIC_DEFAULT_MODEL_URL || "/default_model1.jpg";
   const [outfit, setOutfit] = useState<{
     top?: ClothingItem;
     bottom?: ClothingItem;
     outer?: ClothingItem;
   }>({});
-  const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
+  const [resultImageUrl, setResultImageUrl] = useState<string>(
+    process.env.NEXT_PUBLIC_DEFAULT_MODEL_URL || "/default_model1.jpg",
+  );
+  const latestResultRef = useRef<string>(resultImageUrl);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [isSavingPreview, setIsSavingPreview] = useState(false);
@@ -213,25 +213,29 @@ function DressUpPageContent({
   };
 
   const handleDrop = (item: ClothingItem) => {
+    if (isGenerating) {
+      return;
+    }
     const categoryKey =
       item.category === "TOP"
         ? "top"
         : item.category === "BOTTOM"
-        ? "bottom"
-        : "outer";
+          ? "bottom"
+          : "outer";
     setOutfit((prev) => ({
       ...prev,
       [categoryKey]: item,
     }));
     setGenerationError(null);
-    setResultImageUrl(null);
     setIsGenerating(true);
-    const targetImageUrl = resultImageUrl || modelImageUrl;
+
+    const modelImageUrl = latestResultRef.current;
+
     fetch("/api/replicate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        modelImageUrl: targetImageUrl,
+        modelImageUrl,
         item: item,
       }),
     })
@@ -241,6 +245,7 @@ function DressUpPageContent({
         }
         const data = (await response.json()) as { output?: string };
         if (data.output) {
+          latestResultRef.current = data.output;
           setResultImageUrl(data.output);
         } else {
           throw new Error("missing output");
@@ -259,20 +264,10 @@ function DressUpPageContent({
     setIsSavingPreview(true);
     setGenerationError(null);
     try {
-      const sourceUrl = resultImageUrl || modelImageUrl;
-      const response = await fetch(sourceUrl);
-      if (!response.ok) {
-        throw new Error("preview download failed");
-      }
-      const blob = await response.blob();
-      const file = new File([blob], "outfit_preview.jpg", {
-        type: blob.type || "image/jpeg",
-      });
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadResponse = await fetchWithAuth("/images/upload", {
+      const uploadResponse = await fetch("/api/images/upload", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceUrl: resultImageUrl }),
       });
       if (!uploadResponse.ok) {
         throw new Error("preview upload failed");
@@ -344,7 +339,6 @@ function DressUpPageContent({
             <DropZone
               onDrop={handleDrop}
               outfit={outfit}
-              modelImageUrl={modelImageUrl}
               resultImageUrl={resultImageUrl}
               isGenerating={isGenerating}
             />

@@ -12,6 +12,12 @@ interface AppState {
   deckSlot1: SavedOutfit | undefined;
   deckSlot2: SavedOutfit | undefined;
   selectedBattleOutfit: SavedOutfit | null;
+  battleSessionId: number | null;
+  opponentProfile: {
+    id: number;
+    nickname: string;
+    winCount: number;
+  } | null;
   battleMessage: string;
   isWinner: boolean;
   afterMessage: string;
@@ -26,6 +32,11 @@ interface AppState {
   deleteOutfit: (id: number) => void;
   updateDeck: (slot: 1 | 2, outfit: SavedOutfit | undefined) => void;
   selectBattleOutfit: (outfit: SavedOutfit) => void;
+  setBattleSessionId: (sessionId: number | null) => void;
+  setOpponentProfile: (
+    profile: { id: number; nickname: string; winCount: number } | null,
+  ) => void;
+  setOpponentOutfit: (outfit: SavedOutfit) => void;
   setBattleMessage: (message: string) => void;
   setBattleResult: (winner: boolean) => void;
   submitAfterMessage: (message: string) => boolean;
@@ -57,10 +68,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
   const [selectedBattleOutfit, setSelectedBattleOutfit] =
     useState<SavedOutfit | null>(null);
+  const [battleSessionId, setBattleSessionId] = useState<number | null>(null);
+  const [opponentProfile, setOpponentProfile] = useState<{
+    id: number;
+    nickname: string;
+    winCount: number;
+  } | null>(null);
   const [battleMessage, setBattleMessage] = useState("");
   const [isWinner, setIsWinner] = useState(false);
   const [afterMessage, setAfterMessage] = useState("");
   const [isAfterSuccess, setIsAfterSuccess] = useState(false);
+  const [opponentOutfitState, setOpponentOutfitState] =
+    useState<SavedOutfit>(opponentOutfit);
 
   const setSessionTokens = (accessToken: string, refreshTokenValue: string) => {
     setToken(accessToken);
@@ -138,6 +157,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setIsAfterSuccess(false);
   };
 
+  const setOpponentOutfit = (outfit: SavedOutfit) => {
+    setOpponentOutfitState(outfit);
+  };
+
   const setBattleResult = (winner: boolean) => {
     setIsWinner(winner);
   };
@@ -166,6 +189,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const resetBattle = () => {
     setSelectedBattleOutfit(null);
+    setBattleSessionId(null);
+    setOpponentProfile(null);
     setBattleMessage("");
     setIsWinner(false);
     setAfterMessage("");
@@ -188,11 +213,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       deckSlot1,
       deckSlot2,
       selectedBattleOutfit,
+      battleSessionId,
+      opponentProfile,
       battleMessage,
       isWinner,
       afterMessage,
       isAfterSuccess,
-      opponentOutfit,
+      opponentOutfit: opponentOutfitState,
       setToken,
       setSessionTokens,
       clearSessionTokens,
@@ -202,6 +229,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       deleteOutfit,
       updateDeck,
       selectBattleOutfit,
+      setBattleSessionId,
+      setOpponentProfile,
+      setOpponentOutfit,
       setBattleMessage,
       setBattleResult,
       submitAfterMessage,
@@ -215,10 +245,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       deckSlot1,
       deckSlot2,
       selectedBattleOutfit,
+      battleSessionId,
+      opponentProfile,
       battleMessage,
       isWinner,
       afterMessage,
       isAfterSuccess,
+      opponentOutfitState,
     ],
   );
 

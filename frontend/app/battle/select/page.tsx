@@ -7,12 +7,13 @@ import { PatternBackground } from "@/_components/PatternBackground";
 import { useAppState } from "@/store/appState";
 import { useAuthGate } from "@/hooks/useAuthGate";
 import { SavedOutfit } from "@/types/models";
+import { fetchWithAuth } from "@/utils/apiClient";
 
 interface BattleSelectPageProps {
   username: string;
   savedOutfits: SavedOutfit[];
   onBack: () => void;
-  onSelect: (outfit: SavedOutfit) => void;
+  onSelect: (outfit: SavedOutfit) => Promise<void>;
 }
 
 function BattleSelectPage({
@@ -39,16 +40,12 @@ function BattleSelectPage({
     }
   }, [timeLeft, isReady]);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (savedOutfits.length === 0) return; // 덱이 비어있으면 진행 불가
 
     const outfitToSelect = selectedOutfit || savedOutfits[0];
     setIsReady(true);
-
-    // Simulate waiting for opponent (2 seconds)
-    setTimeout(() => {
-      onSelect(outfitToSelect);
-    }, 2000);
+    await onSelect(outfitToSelect);
   };
 
   return (
@@ -219,7 +216,12 @@ function BattleSelectPage({
 
 export default function BattleSelectRoute() {
   const router = useRouter();
-  const { deckSlot1, deckSlot2, selectBattleOutfit } = useAppState();
+  const {
+    deckSlot1,
+    deckSlot2,
+    selectBattleOutfit,
+    setBattleSessionId,
+  } = useAppState();
   const savedOutfits = [deckSlot1, deckSlot2].filter(
     (outfit): outfit is SavedOutfit => outfit !== undefined,
   );
@@ -236,9 +238,24 @@ export default function BattleSelectRoute() {
       username="플레이어"
       savedOutfits={savedOutfits}
       onBack={() => router.push("/landing")}
-      onSelect={(outfit) => {
+      onSelect={async (outfit) => {
         selectBattleOutfit(outfit);
-        router.push("/battle/message");
+        setBattleSessionId(null);
+        const outfitAId = outfit.id;
+        const outfitBId =
+          deckSlot1?.id === outfit.id ? deckSlot2?.id : deckSlot1?.id;
+        if (!outfitBId) {
+          router.replace("/landing");
+          return;
+        }
+        await fetchWithAuth("/battle/match/start", {
+          method: "POST",
+          body: JSON.stringify({
+            outfitAId,
+            outfitBId,
+          }),
+        });
+        router.push("/battle/waiting");
       }}
     />
   );

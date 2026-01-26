@@ -22,21 +22,17 @@ export async function POST(request: Request) {
     item?: ClothingItem;
   };
 
-  const fallbackModelUrl = process.env.REPLICATE_DEFAULT_MODEL_URL;
-  const resolvedModelImageUrl = modelImageUrl || fallbackModelUrl;
-
-  if (!item?.imageUrl || !resolvedModelImageUrl) {
+  if (!item?.imageUrl || !modelImageUrl) {
     return NextResponse.json(
       { error: "Missing model or garment image" },
       { status: 400 },
     );
   }
 
-  // 여기부터 돈 나가는 부분 ㅋㅋ
   const createResponse = await fetch(REPLICATE_API_BASE, {
     method: "POST",
     headers: {
-      Authorization: `Token ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -48,7 +44,7 @@ export async function POST(request: Request) {
         category: item.category === "BOTTOM" ? "lower_body" : "upper_body",
         force_dc: false,
         garm_img: item.imageUrl,
-        human_img: resolvedModelImageUrl,
+        human_img: modelImageUrl,
         mask_only: false,
         garment_des: makeGarmentDes(item),
       },
@@ -90,7 +86,7 @@ export async function POST(request: Request) {
     await sleep(1500);
     const pollResponse = await fetch(pollUrl, {
       headers: {
-        Authorization: `Token ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
     prediction = (await pollResponse.json()) as typeof prediction;

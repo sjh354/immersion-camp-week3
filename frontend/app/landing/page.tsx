@@ -10,24 +10,22 @@ import { fetchWithAuth } from "@/utils/apiClient";
 
 interface LandingPageProps {
   username: string;
-  onNavigate: (page: "dressup" | "profile" | "battle" | "community") => void;
+  onNavigate: (
+    page: "dressup" | "profile" | "battle" | "community" | "vote",
+  ) => void;
   deckReady: boolean;
 }
 
-function LandingPage({
-  username,
-  onNavigate,
-  deckReady,
-}: LandingPageProps) {
+function LandingPage({ username, onNavigate, deckReady }: LandingPageProps) {
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-pink-200 via-cyan-200 to-yellow-200">
       {/* Pattern background like reference images */}
       <PatternBackground type="hearts" />
 
       {/* Content */}
-      <div className="relative z-10 p-8">
+      <div className="relative z-10 p-4 md:p-8">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-6 md:mb-12">
           <div
             className="inline-block bg-white p-6 rounded-xl shadow-[6px_6px_0px_rgba(0,0,0,0.4)] border-5 border-black mb-6"
             style={{
@@ -45,11 +43,11 @@ function LandingPage({
         </div>
 
         {/* Main Buttons */}
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-6 gap-4 md:gap-8">
           {/* Dress Up Button */}
           <button
             onClick={() => onNavigate("dressup")}
-            className="group relative bg-gradient-to-br from-cyan-500 via-teal-500 to-cyan-600 p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
+            className="group relative md:col-span-2 bg-gradient-to-br from-cyan-500 via-teal-500 to-cyan-600 p-6 md:p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
           >
             <div className="relative z-10">
               <div className="bg-white w-28 h-28 rounded-xl mx-auto mb-5 flex items-center justify-center group-hover:scale-110 transition-transform border-5 border-black shadow-[4px_4px_0px_rgba(0,0,0,0.3)]">
@@ -91,7 +89,7 @@ function LandingPage({
           <button
             onClick={() => deckReady && onNavigate("battle")}
             disabled={!deckReady}
-            className={`group relative bg-gradient-to-br from-pink-500 via-purple-500 to-pink-600 p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] border-6 border-black transition-all ${
+            className={`group relative md:col-span-2 bg-gradient-to-br from-pink-500 via-purple-500 to-pink-600 p-6 md:p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] border-6 border-black transition-all ${
               deckReady
                 ? "hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] cursor-pointer"
                 : "opacity-50 cursor-not-allowed"
@@ -131,10 +129,48 @@ function LandingPage({
             </div>
           </button>
 
+          {/* Vote Button */}
+          <button
+            onClick={() => onNavigate("vote")}
+            className="group relative md:col-span-2 bg-gradient-to-br from-cyan-400 via-blue-400 to-indigo-500 p-6 md:p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
+          >
+            <div className="relative z-10">
+              <div className="bg-white w-28 h-28 rounded-xl mx-auto mb-5 flex items-center justify-center group-hover:scale-110 transition-transform border-5 border-black shadow-[4px_4px_0px_rgba(0,0,0,0.3)]">
+                <Swords className="w-16 h-16 text-black" strokeWidth={3} />
+              </div>
+              <h2
+                className="text-4xl font-black text-white mb-2 [text-shadow:_3px_3px_0_rgb(0_0_0)]"
+                style={{ fontFamily: "Impact, fantasy" }}
+              >
+                투표 하러가기
+              </h2>
+              <p
+                className="text-xl font-bold text-white [text-shadow:_2px_2px_0_rgb(0_0_0)]"
+                style={{ fontFamily: "Impact, fantasy" }}
+              >
+                다른 대결 구경하기
+              </p>
+            </div>
+
+            <div className="absolute top-5 right-5">
+              <Sparkles
+                className="w-10 h-10 text-white animate-pulse"
+                strokeWidth={3}
+              />
+            </div>
+            <div className="absolute bottom-5 left-5">
+              <Sparkles
+                className="w-8 h-8 text-white animate-pulse"
+                strokeWidth={3}
+                style={{ animationDelay: "0.4s" }}
+              />
+            </div>
+          </button>
+
           {/* Community Button */}
           <button
             onClick={() => onNavigate("community")}
-            className="group relative bg-gradient-to-br from-yellow-400 via-orange-400 to-red-400 p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
+            className="group relative md:col-span-2 md:col-start-2 bg-gradient-to-br from-yellow-400 via-orange-400 to-red-400 p-6 md:p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
           >
             <div className="relative z-10">
               <div className="bg-white w-28 h-28 rounded-xl mx-auto mb-5 flex items-center justify-center group-hover:scale-110 transition-transform border-5 border-black shadow-[4px_4px_0px_rgba(0,0,0,0.3)]">
@@ -174,7 +210,7 @@ function LandingPage({
           {/* Profile Button */}
           <button
             onClick={() => onNavigate("profile")}
-            className="group relative bg-gradient-to-br from-purple-500 via-yellow-500 to-pink-500 p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
+            className="group relative md:col-span-2 bg-gradient-to-br from-purple-500 via-yellow-500 to-pink-500 p-6 md:p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
           >
             <div className="relative z-10">
               <div className="bg-white w-28 h-28 rounded-xl mx-auto mb-5 flex items-center justify-center group-hover:scale-110 transition-transform border-5 border-black shadow-[4px_4px_0px_rgba(0,0,0,0.3)]">
@@ -275,6 +311,8 @@ export default function LandingRoute() {
           router.push("/battle/select");
         } else if (page === "community") {
           router.push("/community");
+        } else if (page === "vote") {
+          router.push("/battle/vote");
         }
       }}
     />
