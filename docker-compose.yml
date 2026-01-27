@@ -21,3 +21,21 @@ services:
     restart: always
     ports:
       - "6379:6379"
+
+  # Spring Boot 앱 설정
+  app:
+    build: .
+    container_name: fashion_app
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - redis
+    environment:
+      # 컨테이너 내부에서는 서비스명(db, redis)으로 접속해야 함
+      SPRING_DATASOURCE_URL: jdbc:mariadb://db:3306/fashion_game?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
+      SPRING_DATA_REDIS_HOST: redis
+      # application-secret.yml에 있는 키값들이 필요하다면 여기서 주입하거나 파일을 같이 빌드해야 함
+      # 예시:
+      # GOOGLE_CLIENT_ID: ...
+    restart: always
