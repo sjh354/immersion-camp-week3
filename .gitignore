@@ -31,8 +31,29 @@ build/
 ### VS Code ###
 .vscode/
 
-### Secrets ###
+### Node / Next.js ###
+node_modules/
+/.next/
+**/.next/
+/out/
+/dist/
+/coverage/
+/.turbo/
+.npmrc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### Secrets / Env ###
+.env
+.env.*.local
 application-secret.yml
 
-### Docker Data ###
+### OS / Logs ###
+.DS_Store
+Thumbs.db
+*.log
+
+### Docker / Runtime Data ###
 mysql_data/
