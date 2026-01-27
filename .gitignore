@@ -57,3 +57,4 @@ Thumbs.db
 
 ### Docker / Runtime Data ###
 mysql_data/
+.env*.local
