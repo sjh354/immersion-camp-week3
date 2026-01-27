@@ -39,7 +39,8 @@ interface AppState {
   setOpponentOutfit: (outfit: SavedOutfit) => void;
   setBattleMessage: (message: string) => void;
   setBattleResult: (winner: boolean) => void;
-  submitAfterMessage: (message: string) => boolean;
+  setAfterResult: (success: boolean) => void;
+  submitAfterMessage: (message: string) => Promise<boolean>;
   resetBattle: () => void;
 }
 
@@ -184,26 +185,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setIsWinner(winner);
   };
 
-  const submitAfterMessage = (message: string) => {
-    setAfterMessage(message);
-    const positiveKeywords = [
-      "좋아",
-      "사랑",
-      "멋져",
-      "예쁘",
-      "함께",
-      "데이트",
-      "영화",
-      "커피",
-      "산책",
-    ];
-    const hasPositiveWord = positiveKeywords.some((keyword) =>
-      message.includes(keyword),
-    );
-    const isLongEnough = message.length >= 10;
-    const success = hasPositiveWord && isLongEnough;
+  const setAfterResult = (success: boolean) => {
     setIsAfterSuccess(success);
-    return success;
+  };
+
+  const submitAfterMessage = async (message: string) => {
+    setAfterMessage(message);
+
+    // 2. 백엔드 전송
+    if (battleSessionId) {
+      try {
+        await fetchWithAuth("/battle/round/submit", {
+          method: "POST",
+          body: JSON.stringify({
+            sessionId: battleSessionId,
+            roundNum: 2,
+            ment: message
+          })
+        });
+      } catch (e) {
+        console.error("Failed to submit ment", e);
+      }
+    }
+
+    return true;
   };
 
   const resetBattle = () => {
@@ -245,6 +250,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setOpponentOutfit,
       setBattleMessage,
       setBattleResult,
+      setAfterResult,
       submitAfterMessage,
       resetBattle,
     }),

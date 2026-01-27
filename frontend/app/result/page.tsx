@@ -9,21 +9,27 @@ import { useAppState } from "@/store/appState";
 import { useAuthGate } from "@/hooks/useAuthGate";
 import { SavedOutfit } from "@/types/models";
 
-interface ResultPageProps {
+export interface ResultPageProps {
   player1: {
     username: string;
-    outfit: SavedOutfit;
+    outfit: {
+      name: string;
+      previewUrl: string;
+    };
   };
   player2: {
     username: string;
-    outfit: SavedOutfit;
+    outfit: {
+      name: string;
+      previewUrl: string;
+    };
   };
   isWinner: boolean;
   isAfterSuccess: boolean;
   onBack: () => void;
 }
 
-function ResultPage({
+export function ResultPage({
   player1,
   player2,
   isWinner,

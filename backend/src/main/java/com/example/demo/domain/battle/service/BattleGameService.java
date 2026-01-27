@@ -25,13 +25,18 @@ public class BattleGameService {
     public void transitionToRound2(Long sessionId) {
         String sessionKey = "battle:session:" + sessionId;
 
-        Integer hostVotes1 = (Integer) redisTemplate.opsForHash().get(sessionKey, "hostVoteCountRound1");
-        Integer guestVotes1 = (Integer) redisTemplate.opsForHash().get(sessionKey, "guestVoteCountRound1");
+        Integer hostVotes1 = getInt(sessionKey, "hostVoteCountRound1");
+        Integer guestVotes1 = getInt(sessionKey, "guestVoteCountRound1");
         int hVotes = hostVotes1 != null ? hostVotes1 : 0;
         int gVotes = guestVotes1 != null ? guestVotes1 : 0;
 
-        Long hostId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "hostId").toString());
-        Long guestId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "guestId").toString());
+        Long hostId = getLong(sessionKey, "hostId");
+        Long guestId = getLong(sessionKey, "guestId");
+        
+        if (hostId == null || guestId == null) {
+            // 방이 만료되었거나 데이터 오류
+            throw new IllegalStateException("배틀 정보를 찾을 수 없습니다.");
+        }
 
         Long r1WinnerId;
         Long r1LoserId;
@@ -73,39 +78,47 @@ public class BattleGameService {
     @Transactional
     public void endGame(Long sessionId) {
         String sessionKey = "battle:session:" + sessionId;
+        System.out.println("[BattleGameService] endGame called for session: " + sessionId);
 
-        Long r1WinnerId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "round1WinnerId").toString());
-        Long hostId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "hostId").toString());
-        Long guestId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "guestId").toString());
+        Long r1WinnerId = getLong(sessionKey, "round1WinnerId");
+        Long hostId = getLong(sessionKey, "hostId");
+        Long guestId = getLong(sessionKey, "guestId");
+        
+        System.out.println("[BattleGameService] IDs - Winner: " + r1WinnerId + ", Host: " + hostId + ", Guest: " + guestId);
+
+        if (r1WinnerId == null || hostId == null || guestId == null) {
+            System.out.println("[BattleGameService] Missing IDs, aborting endGame.");
+            return; 
+        }
+
         Long r1LoserId = r1WinnerId.equals(hostId) ? guestId : hostId;
 
-        Integer successVotes = (Integer) redisTemplate.opsForHash().get(sessionKey, "round2VoteSuccessCount");
-        Integer failVotes = (Integer) redisTemplate.opsForHash().get(sessionKey, "round2VoteFailCount");
+        Integer successVotes = getInt(sessionKey, "round2VoteSuccessCount");
+        Integer failVotes = getInt(sessionKey, "round2VoteFailCount");
         int sVotes = successVotes != null ? successVotes : 0;
         int fVotes = failVotes != null ? failVotes : 0;
-
+        
+        System.out.println("[BattleGameService] Votes - Success: " + sVotes + ", Fail: " + fVotes);
+        
         String r2Result = (sVotes >= fVotes) ? "SUCCESS" : "FAIL";
 
-        // DB 업데이트: 이미 1라운드 종료 시(round transition)에 반영되었으므로 여기서는 생략
-        // Member winner = memberRepository.findById(r1WinnerId).orElseThrow();
-        // Member loser = memberRepository.findById(r1LoserId).orElseThrow();
+        // ... (Skipped DB updates) ...
 
-        // 2라운드 성공 보상 로직 등이 필요하면 여기에 추가
-        // if ("SUCCESS".equals(r2Result)) { ... }
-        
-        // (선택) 2라운드 성공 여부에 따라 추가 보상? 일단 전적만 승/패 반영
-
-        // 결과 전송
         BattleMessage resultMessage = BattleMessage.builder()
                 .type(BattleMessage.MessageType.END)
                 .sessionId(sessionId)
-                .content(r2Result) // 2라운드 성공/실패 여부
+                .content(r2Result)
                 .round1WinnerId(r1WinnerId)
                 .round2VoteSuccessCount(sVotes)
                 .round2VoteFailCount(fVotes)
                 .build();
-
+        
+        System.out.println("[BattleGameService] Sending END message.");
         messagingTemplate.convertAndSend("/topic/battle/" + sessionId, resultMessage);
+
+        // Redis 상태 업데이트 (종료 상태 저장)
+        redisTemplate.opsForHash().put(sessionKey, "status", "END");
+        System.out.println("[BattleGameService] Redis status updated to END.");
 
         // Redis 정리
         redisTemplate.opsForSet().remove("battle:active_list", sessionId.toString());
@@ -118,8 +131,13 @@ public class BattleGameService {
     public void submitMent(Long sessionId, Long memberId, String ment) {
         String sessionKey = "battle:session:" + sessionId;
         
-        Long hostId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "hostId").toString());
-        Long guestId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "guestId").toString());
+        // Redis에서 직접 조회 시 NPE 방지
+        Long hostId = getLong(sessionKey, "hostId");
+        Long guestId = getLong(sessionKey, "guestId");
+
+        if (hostId == null || guestId == null) {
+             throw new IllegalArgumentException("배틀 방 정보가 유효하지 않습니다.");
+        }
 
         if (memberId.equals(hostId)) {
             redisTemplate.opsForHash().put(sessionKey, "hostMent", ment);
@@ -134,5 +152,25 @@ public class BattleGameService {
                 "/topic/battle/" + sessionId,
                 Map.of("type", "SESSION", "session", snapshot)
         );
+    }
+
+    private Long getLong(String key, String field) {
+        Object val = redisTemplate.opsForHash().get(key, field);
+        if (val == null) return null;
+        try {
+            return Long.valueOf(val.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer getInt(String key, String field) {
+        Object val = redisTemplate.opsForHash().get(key, field);
+        if (val == null) return null;
+        try {
+            return Integer.parseInt(val.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

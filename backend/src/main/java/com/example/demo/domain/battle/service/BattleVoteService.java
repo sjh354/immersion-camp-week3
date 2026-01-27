@@ -14,8 +14,15 @@ public class BattleVoteService {
         String sessionKey = "battle:session:" + sessionId;
 
         // 1. 현재 라운드 확인
-        Integer currentRoundObj = (Integer) redisTemplate.opsForHash().get(sessionKey, "currentRound");
-        int currentRound = currentRoundObj != null ? currentRoundObj : 1;
+        Object currentRoundObj = redisTemplate.opsForHash().get(sessionKey, "currentRound");
+        int currentRound = 1;
+        if (currentRoundObj != null) {
+            try {
+                currentRound = Integer.parseInt(currentRoundObj.toString());
+            } catch (NumberFormatException e) {
+                // ignore
+            }
+        }
 
         // 2. 투표 기록 키 (User별 투표 내역 저장)
         String voteRecordKey = "battle:vote_record:" + sessionId + ":" + currentRound;

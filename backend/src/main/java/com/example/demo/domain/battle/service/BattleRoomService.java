@@ -15,7 +15,7 @@ public class BattleRoomService {
     private final BattleTimerService battleTimerService; // New injection
 
     // 상수 정의
-    private static final int REQUIRED_SPECTATORS_FOR_START = 3;
+    private static final int REQUIRED_SPECTATORS_FOR_START = 2;
 
     public BattleRoomResponse getBattleRoomSnapshot(Long sessionId) {
         String key = "battle:session:" + sessionId;

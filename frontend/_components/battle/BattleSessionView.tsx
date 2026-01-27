@@ -7,6 +7,7 @@ import { PatternBackground } from "@/_components/PatternBackground";
 import { fetchWithAuth } from "@/utils/apiClient";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
+import { ResultPage } from "@/app/result/page";
 
 interface ChatMessage {
   id: number;
@@ -40,6 +41,7 @@ interface BattleSession {
   opponent?: { nickname?: string };
   hostNickname?: string;
   guestNickname?: string;
+  round1WinnerId?: number | null;
   hostId?: number;
   guestId?: number;
 }
@@ -49,6 +51,7 @@ interface BattleSessionViewProps {
 }
 
 export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
+
   const router = useRouter();
   const [session, setSession] = useState<BattleSession | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -253,6 +256,7 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
               round2VoteFailCount?: number;
               currentRound?: number;
               remainingSeconds?: number;
+              round1WinnerId?: number;
               session?: BattleSession;
             };
             if (payload.type === "CHAT") {
@@ -290,21 +294,38 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
               }
               if (payload.currentRound != null) {
                 setSession((prev) =>
-                  prev ? { ...prev, currentRound: payload.currentRound } : prev,
+                  prev ? { ...prev, currentRound: payload.currentRound! } : prev,
                 );
               }
-            } else if (payload.type === "TIMER") {
+            } else if (payload.type === "INFO" && payload.content === "TIME_UPDATE") {
               setRemainingSeconds(payload.remainingSeconds ?? null);
+            } else if (payload.type === "START") {
+              setSession(prev => prev ? { ...prev, status: "VOTING_ROUND_1", currentRound: 1 } : prev);
+              setRemainingSeconds(60);
             } else if (payload.type === "SESSION" && payload.session) {
               const normalized = normalizeSession(payload.session);
               setSession(normalized);
               setVoteCounts(getVoteCountsFromSession(normalized));
             } else if (payload.type === "ROUND_CHANGE") {
               setSession((prev) =>
-                prev ? { ...prev, currentRound: payload.currentRound ?? 2 } : prev,
+                prev ? {
+                  ...prev,
+                  currentRound: payload.currentRound ?? 2,
+                  round1WinnerId: payload.round1WinnerId,
+                  status: "VOTING_ROUND_2"
+                } : prev,
               );
             } else if (payload.type === "END") {
-              router.replace("/battle/vote");
+              setSession((prev) =>
+                prev
+                  ? {
+                    ...prev,
+                    status: "END",
+                    round2VoteSuccessCount: payload.round2VoteSuccessCount,
+                    round2VoteFailCount: payload.round2VoteFailCount,
+                  }
+                  : prev,
+              );
             }
           } catch {
             // ignore invalid payload
@@ -351,6 +372,72 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
     }
   };
 
+  // Winner Navigation
+  useEffect(() => {
+    if (session?.currentRound === 2 && session.round1WinnerId === currentUserId) {
+      // 승자는 After 페이지로 이동 (중복 이동 방지는 라우터가 처리하거나, useEffect 의존성 관리)
+      router.replace("/after");
+    }
+  }, [session?.currentRound, session?.round1WinnerId, currentUserId, router]);
+
+  const getStatusText = (status?: string) => {
+    switch (status) {
+      case "WAITING_SPECTATORS": return "관전자 대기 중";
+      case "VOTING_ROUND_1": return "1라운드 투표 중";
+      case "VOTING_ROUND_2": return "애프터 결과 확인 중";
+      case "END": return "배틀 종료";
+      default: return status ?? "--";
+    }
+  };
+
+  if (session?.status === "END") {
+    const isHostWinner = session.round1WinnerId === session.hostId;
+    const winner = isHostWinner
+      ? {
+        username: session.hostNickname ?? "PLAYER 1",
+        outfit: {
+          name: "Winner Outfit",
+          previewUrl: session.hostOutfitA?.previewUrl ?? "",
+        },
+      }
+      : {
+        username: session.guestNickname ?? "PLAYER 2",
+        outfit: {
+          name: "Winner Outfit",
+          previewUrl: session.guestOutfitA?.previewUrl ?? "",
+        },
+      };
+    const loser = isHostWinner
+      ? {
+        username: session.guestNickname ?? "PLAYER 2",
+        outfit: {
+          name: "Loser Outfit",
+          previewUrl: session.guestOutfitA?.previewUrl ?? "",
+        },
+      }
+      : {
+        username: session.hostNickname ?? "PLAYER 1",
+        outfit: {
+          name: "Loser Outfit",
+          previewUrl: session.hostOutfitA?.previewUrl ?? "",
+        },
+      };
+
+    const successCount = session.round2VoteSuccessCount ?? 0;
+    const failCount = session.round2VoteFailCount ?? 0;
+    const isAfterSuccess = successCount >= failCount;
+
+    return (
+      <ResultPage
+        player1={winner}
+        player2={loser}
+        isWinner={true}
+        isAfterSuccess={isAfterSuccess}
+        onBack={() => router.push("/landing")}
+      />
+    );
+  }
+
   return (
     <div className="h-screen relative overflow-hidden bg-gradient-to-br from-cyan-100 via-pink-100 to-yellow-100">
       <PatternBackground type="stars" />
@@ -361,74 +448,114 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
             라운드 {session?.currentRound ?? "--"}
           </div>
           <div className="bg-white px-4 py-2 rounded-full border-3 border-black font-black text-sm">
-            상태 {session?.status ?? "--"}
+            상태: {getStatusText(session?.status)}
+          </div>
+          <div className="bg-red-500 text-white px-4 py-2 rounded-full border-3 border-black font-black text-sm animate-pulse">
+            남은 시간: {remainingSeconds ?? "--"}초
           </div>
         </div>
         <div className="h-full grid gap-6 md:grid-cols-[1fr_1fr_0.8fr]">
-          {[
-            {
-              label: session?.hostNickname ?? "PLAYER 1",
-              previewUrl: session?.hostOutfitA?.previewUrl,
-              ment: session?.hostMent,
-              targetId: session?.hostId,
-              currentVotes: voteCounts.voteA,
-              fallbackVote: "SUCCESS" as const,
-            },
-            {
-              label: session?.guestNickname ?? "PLAYER 2",
-              previewUrl: session?.guestOutfitA?.previewUrl,
-              ment: session?.guestMent,
-              targetId: session?.guestId,
-              currentVotes: voteCounts.voteB,
-              fallbackVote: "FAIL" as const,
-            },
-          ].map((player, index) => {
-            const isRound2 = (session?.currentRound ?? 1) >= 2;
-            const voteLabel = isRound2
-              ? player.fallbackVote === "SUCCESS"
-                ? "성공"
-                : "실패"
-              : "투표";
-            return (
-              <section
-                key={`player-${index}`}
-                className="bg-white rounded-3xl border-6 border-black shadow-[10px_10px_0px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col min-h-0"
-              >
+          {/* Round 2: Winner View + Voting Buttons */}
+          {(session?.currentRound ?? 1) >= 2 ? (
+            <div className="col-span-2 flex flex-col items-center justify-center p-4">
+              {/* Winner Card */}
+              <section className="w-full max-w-md bg-white rounded-3xl border-6 border-black shadow-[10px_10px_0px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col mb-6">
                 <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-yellow-500 px-6 py-4 text-white font-black text-xl flex justify-between items-center">
-                  <span>{player.label}</span>
-                  <button
-                    onClick={() => handleVote(player.targetId, player.fallbackVote)}
-                    disabled={!isWsConnected || (!player.targetId && !isRound2)}
-                    className="bg-white text-black px-4 py-1.5 rounded-full text-sm font-black border-2 border-black hover:bg-gray-100 disabled:opacity-50 active:scale-95 transition-transform"
-                  >
-                    👍 {voteLabel} {player.currentVotes}
-                  </button>
+                  <span>{session?.round1WinnerId === session?.hostId ? session?.hostNickname : session?.guestNickname} (승자)</span>
                 </div>
-                <div className="flex-1 flex flex-col min-h-0">
-                  <div className="flex-[3] p-4 border-b-4 border-black flex items-center justify-center min-h-0">
-                    <div className="w-full h-full rounded-xl border-3 border-black bg-white overflow-hidden">
-                      {player.previewUrl ? (
-                        <img
-                          src={player.previewUrl}
-                          alt={player.label}
-                          className="h-full w-full object-contain bg-white"
-                        />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center text-gray-500 font-bold">
-                          이미지 없음
-                        </div>
-                      )}
-                    </div>
+                <div className="p-4 border-b-4 border-black flex items-center justify-center">
+                  <div className="w-full h-80 rounded-xl border-3 border-black bg-white overflow-hidden">
+                    <img
+                      src={session?.round1WinnerId === session?.hostId ? session?.hostOutfitA?.previewUrl : session?.guestOutfitA?.previewUrl}
+                      alt="Winner"
+                      className="h-full w-full object-contain bg-white"
+                    />
                   </div>
-                  <div className="flex-[1] p-4 flex flex-col min-h-0">
-                    <div className="flex-1 min-h-[120px] rounded-xl border-3 border-black bg-yellow-50 p-4 text-gray-800 font-semibold overflow-y-auto">
-                      {player.ment ?? "아직 멘트가 등록되지 않았습니다."}
-                    </div>
-                  </div>
+                </div>
+                <div className="p-4 bg-yellow-50 font-bold text-gray-800 border-t-4 border-black min-h-[100px] whitespace-pre-wrap">
+                  {(() => {
+                    const isHostWinner = session?.round1WinnerId === session?.hostId;
+                    const ment = isHostWinner ? session?.hostMent : session?.guestMent;
+                    return ment ? ment : <span className="text-gray-400">멘트 작성 중...</span>;
+                  })()}
                 </div>
               </section>
-            );
-          })}
+
+              {/* Voting Buttons for Spectators */}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => handleVote(undefined, "SUCCESS")}
+                  disabled={!isWsConnected || !((session?.round1WinnerId === session?.hostId ? session?.hostMent : session?.guestMent))}
+                  className="bg-pink-500 text-white px-8 py-4 rounded-2xl border-4 border-black font-black text-xl shadow-[6px_6px_0px_rgba(0,0,0,0.3)] hover:translate-y-1 active:translate-y-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  💖 성공! ({voteCounts.voteA})
+                </button>
+                <button
+                  onClick={() => handleVote(undefined, "FAIL")}
+                  disabled={!isWsConnected || !((session?.round1WinnerId === session?.hostId ? session?.hostMent : session?.guestMent))}
+                  className="bg-gray-500 text-white px-8 py-4 rounded-2xl border-4 border-black font-black text-xl shadow-[6px_6px_0px_rgba(0,0,0,0.3)] hover:translate-y-1 active:translate-y-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  💔 실패... ({voteCounts.voteB})
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Round 1: Two Players */
+            [
+              {
+                label: session?.hostNickname ?? "PLAYER 1",
+                previewUrl: session?.hostOutfitA?.previewUrl,
+                ment: session?.hostMent,
+                targetId: session?.hostId,
+                currentVotes: voteCounts.voteA,
+                fallbackVote: "SUCCESS" as const,
+              },
+              {
+                label: session?.guestNickname ?? "PLAYER 2",
+                previewUrl: session?.guestOutfitA?.previewUrl,
+                ment: session?.guestMent,
+                targetId: session?.guestId,
+                currentVotes: voteCounts.voteB,
+                fallbackVote: "FAIL" as const,
+              },
+            ].map((player, index) => {
+              return (
+                <section
+                  key={`player-${index}`}
+                  className="bg-white rounded-3xl border-6 border-black shadow-[10px_10px_0px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col min-h-0"
+                >
+                  <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-yellow-500 px-6 py-4 text-white font-black text-xl flex justify-between items-center">
+                    <span>{player.label}</span>
+                    <button
+                      onClick={() => handleVote(player.targetId, player.fallbackVote)}
+                      disabled={!isWsConnected || !player.targetId}
+                      className="bg-white text-black px-4 py-1.5 rounded-full text-sm font-black border-2 border-black hover:bg-gray-100 disabled:opacity-50 active:scale-95 transition-transform"
+                    >
+                      👍 투표 {player.currentVotes}
+                    </button>
+                  </div>
+                  <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-[3] p-4 border-b-4 border-black flex items-center justify-center min-h-0">
+                      <div className="w-full h-full rounded-xl border-3 border-black bg-white overflow-hidden">
+                        {player.previewUrl ? (
+                          <img
+                            src={player.previewUrl}
+                            alt={player.label}
+                            className="h-full w-full object-contain bg-white"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-gray-500 font-bold">
+                            이미지 없음
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Round 1 Ment (Optional or Hidden) */}
+                  </div>
+                </section>
+              );
+            })
+          )}
 
           <section className="bg-white rounded-3xl border-6 border-black shadow-[10px_10px_0px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col min-h-0 md:col-span-1">
             <div className="flex items-center justify-between bg-black text-white px-6 py-4">
