@@ -28,22 +28,14 @@ public class WebSocketEventListener {
             Long sessionId = Long.parseLong(destination.replace("/topic/battle/", ""));
             String sessionKey = "battle:session:" + sessionId;
 
-            // 1. 관전자 수 증가 및 상태 확인
-            Long count = redisTemplate.opsForHash().increment(sessionKey, "spectatorCount", 1);
-
             // 2. 채팅 히스토리 전송 (새로 들어온 사람에게만)
             List<Object> history = chatService.getChatHistory(sessionId);
             if (history != null) {
                 messagingTemplate.convertAndSend("/topic/battle/" + sessionId + "/history", history);
             }
 
-            // 3. 3명이 되는 순간 타이머 시작 (상태가 WAITING_SPECTATORS일 때만)
-            if (count >= 3) {
-                String status = (String) redisTemplate.opsForHash().get(sessionKey, "status");
-                if ("WAITING_SPECTATORS".equals(status)) {
-                    timerService.startBattleTimer(sessionId);
-                }
-            }
+            // NOTE: 관전자 수 카운트 및 타이머 시작은 BattleRoomService.enterSpectator()에서 perform 합니다.
+            // 여기서는 웹소켓 연결만 처리하고, 중복 카운팅을 방지하기 위해 로직을 제거합니다.
         }
     }
 }

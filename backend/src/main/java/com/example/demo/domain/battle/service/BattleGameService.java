@@ -20,7 +20,8 @@ public class BattleGameService {
     private final MemberRepository memberRepository;
     private final BattleRoomService battleRoomService;
 
-    // 1. 라운드 2 시작 (1라운드 결과 정산 및 승자 결정)
+    // 1. 라운드 2 시작 (1라운드 결과 정산 및 승자 결정 -> 승자/패자 DB 업데이트)
+    @Transactional
     public void transitionToRound2(Long sessionId) {
         String sessionKey = "battle:session:" + sessionId;
 
@@ -33,15 +34,24 @@ public class BattleGameService {
         Long guestId = Long.valueOf(redisTemplate.opsForHash().get(sessionKey, "guestId").toString());
 
         Long r1WinnerId;
+        Long r1LoserId;
         String winReason;
 
-        if (hVotes >= gVotes) { // 동점시 Host 승리 (규칙 단순화)
+        if (hVotes >= gVotes) { // 동점시 Host 승리
             r1WinnerId = hostId;
+            r1LoserId = guestId;
             winReason = "HOST_WON_ROUND_1";
         } else {
             r1WinnerId = guestId;
+            r1LoserId = hostId;
             winReason = "GUEST_WON_ROUND_1";
         }
+
+        // DB 업데이트: 승자는 +1승, 패자는 +1패 (1라운드 종료 시점에 즉시 반영)
+        Member winner = memberRepository.findById(r1WinnerId).orElseThrow();
+        Member loser = memberRepository.findById(r1LoserId).orElseThrow();
+        winner.incrementWinCount();
+        loser.incrementLossCount();
 
         // Redis 상태 업데이트
         redisTemplate.opsForHash().put(sessionKey, "currentRound", 2);
@@ -76,12 +86,12 @@ public class BattleGameService {
 
         String r2Result = (sVotes >= fVotes) ? "SUCCESS" : "FAIL";
 
-        // DB 업데이트: 승자는 r1Winner, 패자는 r1Loser
-        Member winner = memberRepository.findById(r1WinnerId).orElseThrow();
-        Member loser = memberRepository.findById(r1LoserId).orElseThrow();
+        // DB 업데이트: 이미 1라운드 종료 시(round transition)에 반영되었으므로 여기서는 생략
+        // Member winner = memberRepository.findById(r1WinnerId).orElseThrow();
+        // Member loser = memberRepository.findById(r1LoserId).orElseThrow();
 
-        winner.incrementWinCount();
-        loser.incrementLossCount();
+        // 2라운드 성공 보상 로직 등이 필요하면 여기에 추가
+        // if ("SUCCESS".equals(r2Result)) { ... }
         
         // (선택) 2라운드 성공 여부에 따라 추가 보상? 일단 전적만 승/패 반영
 

@@ -15,9 +15,16 @@ import com.example.demo.domain.battle.dto.BattleRoomResponse;
 public class BattleRoomController {
 
     private final BattleRoomService battleRoomService;
+    private final com.example.demo.domain.member.repository.MemberRepository memberRepository;
 
     @GetMapping("/{sessionId}")
-    public ResponseEntity<BattleRoomResponse> enterBattleRoom(@PathVariable Long sessionId) {
+    public ResponseEntity<BattleRoomResponse> enterBattleRoom(@PathVariable Long sessionId, java.security.Principal principal) {
+        if (principal != null) {
+            String email = principal.getName();
+            memberRepository.findByEmail(email).ifPresent(member -> {
+                battleRoomService.enterSpectator(sessionId, member);
+            });
+        }
         // 방의 초기 스냅샷 데이터를 반환
         return ResponseEntity.ok(battleRoomService.getBattleRoomSnapshot(sessionId));
     }

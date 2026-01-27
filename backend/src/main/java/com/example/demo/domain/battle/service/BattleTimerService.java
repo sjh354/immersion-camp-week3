@@ -4,32 +4,53 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import lombok.RequiredArgsConstructor;
 import com.example.demo.domain.battle.dto.BattleMessage;
-
 @Service
-@RequiredArgsConstructor
 public class BattleTimerService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final SimpMessagingTemplate messagingTemplate;
     private final BattleGameService gameService;
+
+    public BattleTimerService(RedisTemplate<String, Object> redisTemplate,
+                              SimpMessagingTemplate messagingTemplate,
+                              @org.springframework.context.annotation.Lazy BattleGameService gameService) {
+        this.redisTemplate = redisTemplate;
+        this.messagingTemplate = messagingTemplate;
+        this.gameService = gameService;
+    }
 
     @Async
     @SuppressWarnings("null")
     public void startBattleTimer(Long sessionId) {
         String sessionKey = "battle:session:" + sessionId;
         
+        // Timer Start Broadcast
+        BattleMessage startMsg = BattleMessage.builder()
+                .type(BattleMessage.MessageType.START)
+                .sessionId(sessionId)
+                .content("배틀이 시작되었습니다!")
+                .remainingSeconds(60L)
+                .build();
+        messagingTemplate.convertAndSend("/topic/battle/" + sessionId, startMsg);
+
         // Round 1
         redisTemplate.opsForHash().put(sessionKey, "status", "VOTING_ROUND_1");
-        runTimer(sessionId, 60); // 60초 (예시)
+        setRoundEndTime(sessionKey, 60);
+        runTimer(sessionId, 60); 
 
         // Round 2 전환
         gameService.transitionToRound2(sessionId);
         redisTemplate.opsForHash().put(sessionKey, "status", "VOTING_ROUND_2");
-        runTimer(sessionId, 60); // 60초
+        setRoundEndTime(sessionKey, 60);
+        runTimer(sessionId, 60);
 
         // 종료
         gameService.endGame(sessionId);
+    }
+
+    private void setRoundEndTime(String sessionKey, int durationSeconds) {
+        long endTime = System.currentTimeMillis() + (durationSeconds * 1000L);
+        redisTemplate.opsForHash().put(sessionKey, "roundEndTime", String.valueOf(endTime));
     }
 
     private void runTimer(Long sessionId, int seconds) {
