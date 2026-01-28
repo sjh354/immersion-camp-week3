@@ -54,9 +54,6 @@ services:
       NEXT_PUBLIC_API_URL: http://backend:8080
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
       
   db:
     image: mariadb:10.5

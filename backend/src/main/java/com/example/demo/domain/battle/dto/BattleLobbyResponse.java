@@ -15,4 +15,5 @@ public class BattleLobbyResponse {
     private int guestVoteCount;
     private String status; // WAITING_SPECTATORS, VOTING
     private Long remainingSeconds; // 90초부터 줄어드는 시간
+    private Integer spectatorCount;
 }

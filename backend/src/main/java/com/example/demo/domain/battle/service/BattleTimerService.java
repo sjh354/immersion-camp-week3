@@ -67,8 +67,10 @@ public class BattleTimerService {
                         .type(BattleMessage.MessageType.INFO)
                         .content("TIME_UPDATE")
                         .remainingSeconds((long) i)
+                        .sessionId(sessionId)
                         .build();
                 messagingTemplate.convertAndSend("/topic/battle/" + sessionId, timeMsg);
+                messagingTemplate.convertAndSend("/topic/battle/lobby", timeMsg);
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

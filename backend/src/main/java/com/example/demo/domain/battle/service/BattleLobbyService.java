@@ -54,6 +54,7 @@ public class BattleLobbyService {
                             .guestVoteCount(getInt(data.get("guestVoteCountRound1"))) // Corrected key
                             .status(status)
                             .remainingSeconds(calculateRemainingTime(data))
+                            .spectatorCount(getSpectatorCount(id))
                             .build();
                 })
                 .filter(java.util.Objects::nonNull) // null 제외
@@ -71,9 +72,27 @@ public class BattleLobbyService {
     }
 
     private Long calculateRemainingTime(Map<Object, Object> data) {
-        if (!"VOTING".equals(data.get("status")))
-            return 90L; // 시작 전이면 90초 표시
-        // 타이머 로직과 연동하여 남은 시간 계산 (실제로는 TimerService에서 브로드캐스팅하는 값을 주로 사용)
-        return 0L;
+        Object statusObj = data.get("status");
+        if (statusObj == null) return null;
+        String status = statusObj.toString();
+        if (!"VOTING_ROUND_1".equals(status) && !"VOTING_ROUND_2".equals(status)) {
+            return null;
+        }
+        Object endTimeObj = data.get("roundEndTime");
+        if (endTimeObj == null) return null;
+        try {
+            long endTime = Long.parseLong(endTimeObj.toString());
+            long now = System.currentTimeMillis();
+            return Math.max(0, (endTime - now) / 1000);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer getSpectatorCount(Object sessionId) {
+        if (sessionId == null) return 0;
+        String key = "battle:session:" + sessionId + ":spectators";
+        Long count = redisTemplate.opsForSet().size(key);
+        return count == null ? 0 : count.intValue();
     }
 }

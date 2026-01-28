@@ -167,46 +167,6 @@ function LandingPage({ username, onNavigate, deckReady }: LandingPageProps) {
             </div>
           </button>
 
-          {/* Community Button */}
-          <button
-            onClick={() => onNavigate("community")}
-            className="group relative md:col-span-2 md:col-start-2 bg-gradient-to-br from-yellow-400 via-orange-400 to-red-400 p-6 md:p-10 rounded-xl shadow-[10px_10px_0px_rgba(0,0,0,0.4)] hover:shadow-[12px_12px_0px_rgba(0,0,0,0.4)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all border-6 border-black"
-          >
-            <div className="relative z-10">
-              <div className="bg-white w-28 h-28 rounded-xl mx-auto mb-5 flex items-center justify-center group-hover:scale-110 transition-transform border-5 border-black shadow-[4px_4px_0px_rgba(0,0,0,0.3)]">
-                <Users className="w-16 h-16 text-black" strokeWidth={3} />
-              </div>
-              <h2
-                className="text-4xl font-black text-white mb-2 [text-shadow:_3px_3px_0_rgb(0_0_0)]"
-                style={{ fontFamily: "Impact, fantasy" }}
-              >
-                커뮤니티
-              </h2>
-              <p
-                className="text-xl font-bold text-white [text-shadow:_2px_2px_0_rgb(0_0_0)]"
-                style={{ fontFamily: "Impact, fantasy" }}
-              >
-                내 코디 공유하기
-              </p>
-            </div>
-
-            <div className="absolute top-5 right-5">
-              <Star
-                className="w-10 h-10 text-white animate-pulse"
-                strokeWidth={3}
-                fill="currentColor"
-              />
-            </div>
-            <div className="absolute bottom-5 left-5">
-              <Star
-                className="w-8 h-8 text-white animate-pulse"
-                strokeWidth={3}
-                fill="currentColor"
-                style={{ animationDelay: "0.4s" }}
-              />
-            </div>
-          </button>
-
           {/* Profile Button */}
           <button
             onClick={() => onNavigate("profile")}

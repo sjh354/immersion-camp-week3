@@ -72,6 +72,17 @@ export default function BattleVoteRoute() {
   const [sessions, setSessions] = useState<BattleSessionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const clientRef = useRef<Client | null>(null);
+  const lastTimeUpdateRef = useRef<Record<number, number>>({});
+
+  const touchSessions = (next: BattleSessionSummary[]) => {
+    const now = Date.now();
+    next.forEach((session) => {
+      if (typeof session.remainingSeconds === "number") {
+        lastTimeUpdateRef.current[session.sessionId] = now;
+      }
+    });
+    return next;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +92,8 @@ export default function BattleVoteRoute() {
         if (!res.ok) return;
         const data = (await res.json()) as LobbyResponse[];
         if (!cancelled) {
-          setSessions(Array.isArray(data) ? data.map(mapLobbySession) : []);
+          const mapped = Array.isArray(data) ? data.map(mapLobbySession) : [];
+          setSessions(touchSessions(mapped));
         }
       } catch {
         if (!cancelled) setSessions([]);
@@ -96,6 +108,27 @@ export default function BattleVoteRoute() {
   }, []);
 
   useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setSessions((prev) =>
+        prev.map((session) => {
+          if (typeof session.remainingSeconds !== "number") return session;
+          if (session.remainingSeconds <= 0) return session;
+          const lastUpdate = lastTimeUpdateRef.current[session.sessionId] ?? 0;
+          if (Date.now() - lastUpdate < 1100) return session;
+          lastTimeUpdateRef.current[session.sessionId] = Date.now();
+          return {
+            ...session,
+            remainingSeconds: Math.max(0, session.remainingSeconds - 1),
+          };
+        }),
+      );
+    }, 1000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
     const wsBase = process.env.NEXT_PUBLIC_WS_URL;
     if (!wsBase) return;
     const client = new Client({
@@ -105,20 +138,53 @@ export default function BattleVoteRoute() {
           try {
             const payload = JSON.parse(msg.body) as
               | LobbyResponse[]
-              | { sessions?: LobbyResponse[] };
+              | { sessions?: LobbyResponse[] }
+              | {
+                  type?: string;
+                  content?: string;
+                  sessionId?: number;
+                  remainingSeconds?: number | null;
+                };
+
+            if (
+              typeof payload === "object" &&
+              !Array.isArray(payload) &&
+              (payload as { type?: string }).type === "INFO" &&
+              (payload as { content?: string }).content === "TIME_UPDATE" &&
+              typeof (payload as { sessionId?: number }).sessionId === "number"
+            ) {
+              const sessionId = (payload as { sessionId: number }).sessionId;
+              const remainingSeconds = (payload as {
+                remainingSeconds?: number | null;
+              }).remainingSeconds;
+              lastTimeUpdateRef.current[sessionId] = Date.now();
+              setSessions((prev) =>
+                prev.map((session) =>
+                  session.sessionId === sessionId
+                    ? { ...session, remainingSeconds: remainingSeconds ?? undefined }
+                    : session,
+                ),
+              );
+              return;
+            }
+
             const nextSessions = Array.isArray(payload)
               ? payload
-              : (payload.sessions ?? []);
+              : "sessions" in payload && Array.isArray(payload.sessions)
+                ? payload.sessions
+                : [];
             if (Array.isArray(nextSessions) && nextSessions.length > 0) {
-              setSessions(nextSessions.map(mapLobbySession));
+              setSessions(touchSessions(nextSessions.map(mapLobbySession)));
             } else {
               void fetchWithAuth("/battle/lobby")
                 .then((res) => (res.ok ? res.json() : []))
                 .then((data) =>
                   setSessions(
-                    Array.isArray(data)
-                      ? (data as LobbyResponse[]).map(mapLobbySession)
-                      : [],
+                    touchSessions(
+                      Array.isArray(data)
+                        ? (data as LobbyResponse[]).map(mapLobbySession)
+                        : [],
+                    ),
                   ),
                 )
                 .catch(() => undefined);

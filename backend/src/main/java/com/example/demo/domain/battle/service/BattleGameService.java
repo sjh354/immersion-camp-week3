@@ -45,7 +45,27 @@ public class BattleGameService {
         Long r1LoserId;
         String winReason;
 
-        if (hVotes >= gVotes) { // 동점시 Host 승리
+        if (hVotes == gVotes) {
+            // 1라운드 무승부 -> 세션 종료
+            BattleMessage message = BattleMessage.builder()
+                    .type(BattleMessage.MessageType.END)
+                    .sessionId(sessionId)
+                    .content("DRAW_ROUND_1")
+                    .currentRound(1)
+                    .build();
+
+            messagingTemplate.convertAndSend("/topic/battle/" + sessionId, message);
+
+            // Redis 정리 (endGame과 동일한 정리 로직)
+            redisTemplate.opsForHash().put(sessionKey, "status", "END");
+            redisTemplate.opsForSet().remove("battle:active_list", sessionId.toString());
+            redisTemplate.delete("battle:playing:" + hostId);
+            redisTemplate.delete("battle:playing:" + guestId);
+            redisTemplate.expire(sessionKey, java.time.Duration.ofHours(1));
+            return;
+        }
+
+        if (hVotes > gVotes) { // 무승부는 위에서 처리했으므로 >
             r1WinnerId = hostId;
             r1LoserId = guestId;
             winReason = "HOST_WON_ROUND_1";

@@ -7,7 +7,7 @@ import { PatternBackground } from "@/_components/PatternBackground";
 import { fetchWithAuth } from "@/utils/apiClient";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
-import { ResultPage } from "@/app/result/page";
+import ResultPage from "@/_components/result/ResultPage";
 import { useAppState } from "@/store/appState";
 
 interface ChatMessage {
@@ -45,6 +45,7 @@ interface BattleSession {
   round1WinnerId?: number | null;
   hostId?: number;
   guestId?: number;
+  endReason?: string;
 }
 
 interface BattleSessionViewProps {
@@ -198,6 +199,14 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
   useEffect(() => {
     if (!Number.isFinite(sessionId)) return;
     let cancelled = false;
+    let retryTimer: number | null = null;
+    const scheduleRetry = () => {
+      if (retryTimer !== null) return;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        if (!cancelled) loadSession();
+      }, 3000);
+    };
     const loadSession = async () => {
       try {
         console.log("loadSession", sessionId);
@@ -206,6 +215,7 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
           if (res.status === 404 || res.status === 410) {
             router.replace("/landing");
           }
+          scheduleRetry();
           return;
         }
         const data = (await res.json()) as BattleSession;
@@ -225,12 +235,16 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
           setVoteCounts(getVoteCountsFromSession(normalized));
         }
       } catch {
+        scheduleRetry();
         // ignore for now
       }
     };
     loadSession();
     return () => {
       cancelled = true;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
     };
   }, [sessionId, router]);
 
@@ -396,6 +410,9 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
                 const merged: BattleSession = {
                   ...base,
                   ...payload.session,
+                  sessionId: payload.session?.sessionId ?? base?.sessionId ?? sessionId,
+                  status: payload.session?.status ?? base?.status ?? "WAITING",
+                  currentRound: payload.session?.currentRound ?? base?.currentRound ?? 1,
                   // Preserve non-null/undefined fields when SESSION payload is partial.
                   hostMent: payload.session?.hostMent ?? base?.hostMent,
                   guestMent: payload.session?.guestMent ?? base?.guestMent,
@@ -439,6 +456,7 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
                     status: "END",
                     round2VoteSuccessCount: payload.round2VoteSuccessCount,
                     round2VoteFailCount: payload.round2VoteFailCount,
+                    endReason: payload.content, // Add endReason
                   }
                   : prev,
               );
@@ -584,6 +602,38 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
   };
 
   if (session?.status === "END") {
+    if (session.endReason === "DRAW_ROUND_1") {
+      return (
+        <div className="h-screen relative overflow-hidden bg-gradient-to-br from-gray-200 via-gray-300 to-gray-200 flex flex-col items-center justify-center p-4">
+          <PatternBackground type="stars" />
+
+          <div className="relative z-10 max-w-2xl w-full bg-white rounded-3xl border-8 border-black shadow-[16px_16px_0px_rgba(0,0,0,0.5)] p-8 text-center">
+            <h1 className="text-6xl font-black mb-6 text-gray-800 [text-shadow:_4px_4px_0_rgb(200_200_200)]" style={{ fontFamily: "Impact, fantasy" }}>
+              🤝 무승부! 🤝
+            </h1>
+
+            <div className="bg-gray-100 p-6 rounded-2xl border-4 border-black mb-8">
+              <p className="text-2xl font-black text-gray-700 mb-2">
+                1라운드 투표 결과가 동점입니다.
+              </p>
+              <p className="text-xl font-bold text-gray-500">
+                승부를 가릴 수 없어 배틀이 종료됩니다.
+              </p>
+            </div>
+
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => router.push("/landing")}
+                className="bg-black text-white px-8 py-4 rounded-xl font-black text-xl hover:bg-gray-800 transition-transform active:scale-95 border-4 border-gray-600"
+              >
+                홈으로 돌아가기
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const isHostWinner = session.round1WinnerId === session.hostId;
     const winner = isHostWinner
       ? {

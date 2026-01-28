@@ -1,0 +1,92 @@
+erDiagram
+    MEMBER ||--o{ POST : "creates"
+    MEMBER ||--o{ OUTFIT : "creates"
+    MEMBER ||--o{ UNKNOWN : "mainOutfitId1/2 (Logic only)"
+    MEMBER ||--o{ POST_LIKE : "likes"
+    MEMBER ||--o{ COMMENT : "writes"
+
+    CLOTHES ||--o{ OUTFIT : "used as top/bottom/outer"
+    
+    OUTFIT ||--o{ POST : "featured in"
+    OUTFIT }|--|| MEMBER : "owned by"
+    OUTFIT }|--|| CLOTHES : "top"
+    OUTFIT }|--|| CLOTHES : "bottom"
+    OUTFIT }|--o| CLOTHES : "outer(optional)"
+
+    POST ||--o{ COMMENT : "has"
+    POST ||--o{ POST_LIKE : "has"
+    POST }|--|| MEMBER : "author"
+    POST }|--|| OUTFIT : "showcases"
+
+    COMMENT }|--|| POST : "on"
+    COMMENT }|--|| MEMBER : "author"
+
+    POST_LIKE }|--|| POST : "on"
+    POST_LIKE }|--|| MEMBER : "by"
+
+    MEMBER {
+        Long id PK
+        String email "unique, not null"
+        String password "nullable (social login)"
+        String nickname "not null"
+        String provider "ENUM"
+        String providerId
+        String picture
+        int winCount
+        int lossCount
+        Long mainOutfitId1 "Logic Reference"
+        Long mainOutfitId2 "Logic Reference"
+        LocalDateTime createdAt
+        LocalDateTime updatedAt
+    }
+
+    CLOTHES {
+        Long id PK
+        String name
+        String category "ENUM"
+        String imageUrl
+        String styleTags "TEXT"
+        String brand
+        String sourceUrl
+        LocalDateTime createdAt
+        LocalDateTime updatedAt
+    }
+
+    OUTFIT {
+        Long id PK
+        Long member_id FK
+        Long top_id FK
+        Long bottom_id FK
+        Long outer_id FK "nullable"
+        String name
+        String previewUrl
+        LocalDateTime createdAt
+        LocalDateTime updatedAt
+    }
+
+    POST {
+        Long id PK
+        Long member_id FK
+        Long outfit_id FK
+        String content "TEXT"
+        int likeCount
+        int commentCount
+        LocalDateTime createdAt
+        LocalDateTime updatedAt
+    }
+
+    COMMENT {
+        Long id PK
+        Long post_id FK
+        Long member_id FK
+        String content
+        LocalDateTime createdAt
+        LocalDateTime updatedAt
+    }
+
+    POST_LIKE {
+        Long id PK
+        Long post_id FK
+        Long member_id FK
+        Constraint unique_post_member
+    }
