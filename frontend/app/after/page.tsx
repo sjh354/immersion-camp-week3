@@ -61,7 +61,11 @@ export default function AfterRequestPage() {
   const handleSubmit = async () => {
     if (message.trim()) {
       await submitAfterMessage(message);
-      setIsWaiting(true); // Switch to waiting mode
+      if (battleSessionId) {
+        router.replace(`/battle/game/${battleSessionId}`);
+        return;
+      }
+      setIsWaiting(true); // Fallback if session id is missing
     }
   };
 
@@ -85,12 +89,23 @@ export default function AfterRequestPage() {
               remainingSeconds?: number;
               round2VoteSuccessCount?: number;
               round2VoteFailCount?: number;
+              session?: { round2VoteSuccessCount?: number; round2VoteFailCount?: number };
             };
 
             if (payload.type === "INFO" && payload.content === "TIME_UPDATE") {
               if (payload.remainingSeconds !== undefined) {
                 setVotingTimeLeft(payload.remainingSeconds);
               }
+            } else if (payload.type === "VOTE") {
+              setVoteCounts({
+                voteA: payload.round2VoteSuccessCount ?? 0,
+                voteB: payload.round2VoteFailCount ?? 0,
+              });
+            } else if (payload.type === "SESSION" && payload.session) {
+              setVoteCounts({
+                voteA: payload.session.round2VoteSuccessCount ?? 0,
+                voteB: payload.session.round2VoteFailCount ?? 0,
+              });
             } else if (payload.type === "END") {
               const sVotes = payload.round2VoteSuccessCount ?? 0;
               const fVotes = payload.round2VoteFailCount ?? 0;
@@ -119,7 +134,7 @@ export default function AfterRequestPage() {
     };
   }, [battleSessionId, router, setAfterResult, setBattleResult]);
 
-  // -- Poll Votes & Status (Failsafe for WS) --
+  // -- Poll Status (Failsafe for WS) --
   useEffect(() => {
     if (!battleSessionId) return;
     let cancelled = false;
@@ -150,22 +165,7 @@ export default function AfterRequestPage() {
       } catch { }
     };
 
-    const pollVotes = async () => {
-      try {
-        const res = await fetchWithAuth(`/battle/${battleSessionId}/vote`);
-        if (!res.ok) return;
-        const data = (await res.json()) as { voteA: number; voteB: number };
-        if (!cancelled) {
-          setVoteCounts({
-            voteA: data.voteA ?? 0,
-            voteB: data.voteB ?? 0
-          });
-        }
-      } catch { }
-    };
-
     const runPoll = async () => {
-      await pollVotes();
       // Only poll status if waiting
       if (isWaiting) {
         await pollStatus();

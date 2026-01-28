@@ -8,6 +8,7 @@ import { fetchWithAuth } from "@/utils/apiClient";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import { ResultPage } from "@/app/result/page";
+import { useAppState } from "@/store/appState";
 
 interface ChatMessage {
   id: number;
@@ -69,6 +70,14 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
   const [isComposing, setIsComposing] = useState(false);
   const clientRef = useRef<Client | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
+  const {
+    afterMessage,
+    selectedBattleOutfit,
+    selectBattleOutfit,
+    setOpponentOutfit,
+    setBattleResult,
+    setAfterResult,
+  } = useAppState();
 
   const normalizeSession = (data: BattleSession) => {
     const round = data.currentRound ?? 1;
@@ -77,19 +86,29 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
     const guestOutfitId = isRound2 ? data.guestOutfit2Id : data.guestOutfit1Id;
     const hostPreview = isRound2 ? data.hostPreview2Url : data.hostPreview1Url;
     const guestPreview = isRound2 ? data.guestPreview2Url : data.guestPreview1Url;
+    const hasHostRoundOutfit = Boolean(hostOutfitId || hostPreview);
+    const hasGuestRoundOutfit = Boolean(guestOutfitId || guestPreview);
+    console.log("[BattleSessionView] normalizeSession", {
+      round,
+      isRound2,
+      hostOutfitId,
+      guestOutfitId,
+      hostPreview,
+      guestPreview,
+      hasHostRoundOutfit,
+      hasGuestRoundOutfit,
+    });
 
     return {
       ...data,
       hostOutfitA:
-        data.hostOutfitA ??
-        (hostOutfitId || hostPreview
+        hasHostRoundOutfit
           ? { id: hostOutfitId ?? 0, previewUrl: hostPreview ?? "" }
-          : undefined),
+          : data.hostOutfitA,
       guestOutfitA:
-        data.guestOutfitA ??
-        (guestOutfitId || guestPreview
+        hasGuestRoundOutfit
           ? { id: guestOutfitId ?? 0, previewUrl: guestPreview ?? "" }
-          : undefined),
+          : data.guestOutfitA,
       opponent:
         data.opponent ??
         (data.guestNickname ? { nickname: data.guestNickname } : undefined),
@@ -111,12 +130,41 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
   };
 
   const handleVote = (targetId?: number, fallbackVote?: "SUCCESS" | "FAIL") => {
-    if (!clientRef.current || !clientRef.current.connected) return;
+    const client = clientRef.current;
+    if (!client || !client.connected) {
+      console.log("[BattleSessionView] vote blocked: ws not connected");
+      return;
+    }
+    const status = session?.status;
     const currentRound = session?.currentRound ?? 1;
+    if (currentRound >= 2) {
+      if (status !== "VOTING_ROUND_2") {
+        console.log("[BattleSessionView] vote blocked: status", status);
+        return;
+      }
+    } else {
+      if (status !== "VOTING_ROUND_1") {
+        console.log("[BattleSessionView] vote blocked: status", status);
+        return;
+      }
+    }
     const content =
       currentRound >= 2 ? fallbackVote : targetId?.toString();
-    if (!content) return;
-    clientRef.current.publish({
+    if (!content) {
+      console.log("[BattleSessionView] vote blocked: no content", {
+        currentRound,
+        targetId,
+        fallbackVote,
+      });
+      return;
+    }
+    console.log("[BattleSessionView] vote publish", {
+      sessionId,
+      currentRound,
+      content,
+      status,
+    });
+    client.publish({
       destination: `/app/battle/${sessionId}/vote`,
       body: JSON.stringify({
         senderId: currentUserId,
@@ -155,9 +203,22 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
         console.log("loadSession", sessionId);
         const res = await fetchWithAuth(`/battle/${sessionId}`);
         if (!res.ok) {
+          if (res.status === 404 || res.status === 410) {
+            router.replace("/landing");
+          }
           return;
         }
         const data = (await res.json()) as BattleSession;
+        console.log("[BattleSessionView] REST snapshot", {
+          sessionId,
+          currentRound: data.currentRound,
+          hostMent: data.hostMent,
+          guestMent: data.guestMent,
+          hostPreview1Url: data.hostPreview1Url,
+          hostPreview2Url: data.hostPreview2Url,
+          guestPreview1Url: data.guestPreview1Url,
+          guestPreview2Url: data.guestPreview2Url,
+        });
         if (!cancelled) {
           const normalized = normalizeSession(data);
           setSession(normalized);
@@ -171,7 +232,7 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, router]);
 
   useEffect(() => {
     setChatMessages([]);
@@ -238,6 +299,9 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
     if (!wsBase || !Number.isFinite(sessionId)) return;
     const client = new Client({
       webSocketFactory: () => new SockJS(wsBase),
+      reconnectDelay: 3000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
       connectHeaders: {
         Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
       },
@@ -293,28 +357,80 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
                 });
               }
               if (payload.currentRound != null) {
-                setSession((prev) =>
-                  prev ? { ...prev, currentRound: payload.currentRound! } : prev,
-                );
+                setSession((prev) => {
+                  if (!prev) return prev;
+                  const normalized = normalizeSession({
+                    ...prev,
+                    currentRound: payload.currentRound!,
+                  });
+                  return normalized;
+                });
               }
             } else if (payload.type === "INFO" && payload.content === "TIME_UPDATE") {
               setRemainingSeconds(payload.remainingSeconds ?? null);
+              if (
+                session?.currentRound &&
+                session.currentRound >= 2 &&
+                session.status === "WAITING_MENT"
+              ) {
+                setSession((prev) =>
+                  prev ? { ...prev, status: "VOTING_ROUND_2" } : prev,
+                );
+              }
             } else if (payload.type === "START") {
               setSession(prev => prev ? { ...prev, status: "VOTING_ROUND_1", currentRound: 1 } : prev);
               setRemainingSeconds(60);
             } else if (payload.type === "SESSION" && payload.session) {
-              const normalized = normalizeSession(payload.session);
-              setSession(normalized);
-              setVoteCounts(getVoteCountsFromSession(normalized));
+              console.log("[BattleSessionView] WS SESSION payload", {
+                sessionId,
+                currentRound: payload.session.currentRound,
+                hostMent: payload.session.hostMent,
+                guestMent: payload.session.guestMent,
+                hostPreview1Url: payload.session.hostPreview1Url,
+                hostPreview2Url: payload.session.hostPreview2Url,
+                guestPreview1Url: payload.session.guestPreview1Url,
+                guestPreview2Url: payload.session.guestPreview2Url,
+              });
+              setSession((prev) => {
+                const base = prev ?? payload.session;
+                const merged: BattleSession = {
+                  ...base,
+                  ...payload.session,
+                  // Preserve non-null/undefined fields when SESSION payload is partial.
+                  hostMent: payload.session?.hostMent ?? base?.hostMent,
+                  guestMent: payload.session?.guestMent ?? base?.guestMent,
+                  hostNickname: payload.session?.hostNickname ?? base?.hostNickname,
+                  guestNickname: payload.session?.guestNickname ?? base?.guestNickname,
+                  hostId: payload.session?.hostId ?? base?.hostId,
+                  guestId: payload.session?.guestId ?? base?.guestId,
+                  hostOutfit1Id: payload.session?.hostOutfit1Id ?? base?.hostOutfit1Id,
+                  hostOutfit2Id: payload.session?.hostOutfit2Id ?? base?.hostOutfit2Id,
+                  guestOutfit1Id: payload.session?.guestOutfit1Id ?? base?.guestOutfit1Id,
+                  guestOutfit2Id: payload.session?.guestOutfit2Id ?? base?.guestOutfit2Id,
+                  hostPreview1Url: payload.session?.hostPreview1Url ?? base?.hostPreview1Url,
+                  hostPreview2Url: payload.session?.hostPreview2Url ?? base?.hostPreview2Url,
+                  guestPreview1Url: payload.session?.guestPreview1Url ?? base?.guestPreview1Url,
+                  guestPreview2Url: payload.session?.guestPreview2Url ?? base?.guestPreview2Url,
+                  hostOutfitA: payload.session?.hostOutfitA ?? base?.hostOutfitA,
+                  guestOutfitA: payload.session?.guestOutfitA ?? base?.guestOutfitA,
+                  opponent: payload.session?.opponent ?? base?.opponent,
+                };
+                const normalized = normalizeSession(merged);
+                setVoteCounts(getVoteCountsFromSession(normalized));
+                return normalized;
+              });
             } else if (payload.type === "ROUND_CHANGE") {
-              setSession((prev) =>
-                prev ? {
+              setSession((prev) => {
+                if (!prev) return prev;
+                const normalized = normalizeSession({
                   ...prev,
                   currentRound: payload.currentRound ?? 2,
                   round1WinnerId: payload.round1WinnerId,
-                  status: "VOTING_ROUND_2"
-                } : prev,
-              );
+                  status: "WAITING_MENT",
+                });
+                setVoteCounts(getVoteCountsFromSession(normalized));
+                return normalized;
+              });
             } else if (payload.type === "END") {
               setSession((prev) =>
                 prev
@@ -335,6 +451,9 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
       onDisconnect: () => {
         setIsWsConnected(false);
       },
+      onWebSocketClose: () => {
+        setIsWsConnected(false);
+      },
       onStompError: () => {
         setIsWsConnected(false);
       },
@@ -348,6 +467,69 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
       client.deactivate();
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    if (session?.status !== "END") return;
+    const isParticipant =
+      currentUserId != null &&
+      (currentUserId === session.hostId || currentUserId === session.guestId);
+    const isWinner = isParticipant
+      ? session.round1WinnerId === currentUserId
+      : true;
+    const successCount = session.round2VoteSuccessCount ?? 0;
+    const failCount = session.round2VoteFailCount ?? 0;
+    const isAfterSuccess = successCount >= failCount;
+    if (!isParticipant && !selectedBattleOutfit) {
+      const isHostWinner = session.round1WinnerId === session.hostId;
+      const winnerNickname = isHostWinner
+        ? session.hostNickname ?? "PLAYER 1"
+        : session.guestNickname ?? "PLAYER 2";
+      const loserNickname = isHostWinner
+        ? session.guestNickname ?? "PLAYER 2"
+        : session.hostNickname ?? "PLAYER 1";
+      const winnerOutfit = isHostWinner
+        ? session.hostOutfitA
+        : session.guestOutfitA;
+      const loserOutfit = isHostWinner
+        ? session.guestOutfitA
+        : session.hostOutfitA;
+      selectBattleOutfit({
+        id: winnerOutfit?.id ?? 0,
+        name: `${winnerNickname} Outfit`,
+        previewUrl: winnerOutfit?.previewUrl ?? "",
+        topId: 0,
+        bottomId: 0,
+        outerId: 0,
+        createdAt: new Date().toISOString(),
+      });
+      setOpponentOutfit({
+        id: loserOutfit?.id ?? 0,
+        name: `${loserNickname} Outfit`,
+        previewUrl: loserOutfit?.previewUrl ?? "",
+        topId: 0,
+        bottomId: 0,
+        outerId: 0,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    setBattleResult(isWinner);
+    setAfterResult(isAfterSuccess);
+    router.replace("/result");
+  }, [
+    session?.status,
+    session?.hostId,
+    session?.guestId,
+    session?.round1WinnerId,
+    session?.round2VoteSuccessCount,
+    session?.round2VoteFailCount,
+    currentUserId,
+    router,
+    setBattleResult,
+    setAfterResult,
+    selectBattleOutfit,
+    setOpponentOutfit,
+    selectedBattleOutfit,
+  ]);
 
   const sendChatMessage = () => {
     const content = newMessage.trim();
@@ -374,17 +556,28 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
 
   // Winner Navigation
   useEffect(() => {
-    if (session?.currentRound === 2 && session.round1WinnerId === currentUserId) {
+    if (
+      session?.currentRound === 2 &&
+      session.round1WinnerId === currentUserId &&
+      !afterMessage
+    ) {
       // 승자는 After 페이지로 이동 (중복 이동 방지는 라우터가 처리하거나, useEffect 의존성 관리)
       router.replace("/after");
     }
-  }, [session?.currentRound, session?.round1WinnerId, currentUserId, router]);
+  }, [
+    session?.currentRound,
+    session?.round1WinnerId,
+    currentUserId,
+    router,
+    afterMessage,
+  ]);
 
   const getStatusText = (status?: string) => {
     switch (status) {
       case "WAITING_SPECTATORS": return "관전자 대기 중";
       case "VOTING_ROUND_1": return "1라운드 투표 중";
       case "VOTING_ROUND_2": return "애프터 결과 확인 중";
+      case "WAITING_MENT": return "멘트 대기 중";
       case "END": return "배틀 종료";
       default: return status ?? "--";
     }
@@ -426,12 +619,18 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
     const successCount = session.round2VoteSuccessCount ?? 0;
     const failCount = session.round2VoteFailCount ?? 0;
     const isAfterSuccess = successCount >= failCount;
+    const isParticipant =
+      currentUserId != null &&
+      (currentUserId === session.hostId || currentUserId === session.guestId);
+    const isWinner = isParticipant
+      ? session.round1WinnerId === currentUserId
+      : true;
 
     return (
       <ResultPage
         player1={winner}
         player2={loser}
-        isWinner={true}
+        isWinner={isWinner}
         isAfterSuccess={isAfterSuccess}
         onBack={() => router.push("/landing")}
       />
@@ -442,7 +641,7 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
     <div className="h-screen relative overflow-hidden bg-gradient-to-br from-cyan-100 via-pink-100 to-yellow-100">
       <PatternBackground type="stars" />
 
-      <div className="relative z-10 h-full w-full p-4 md:p-6">
+      <div className="relative z-10 h-full w-full p-4 md:p-6 flex flex-col">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="bg-white px-4 py-2 rounded-full border-3 border-black font-black text-sm">
             라운드 {session?.currentRound ?? "--"}
@@ -454,7 +653,7 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
             남은 시간: {remainingSeconds ?? "--"}초
           </div>
         </div>
-        <div className="h-full grid gap-6 md:grid-cols-[1fr_1fr_0.8fr]">
+        <div className="flex-1 min-h-0 grid gap-6 md:grid-cols-[1fr_1fr_0.8fr]">
           {/* Round 2: Winner View + Voting Buttons */}
           {(session?.currentRound ?? 1) >= 2 ? (
             <div className="col-span-2 flex flex-col items-center justify-center p-4">
@@ -485,14 +684,30 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
               <div className="flex gap-4">
                 <button
                   onClick={() => handleVote(undefined, "SUCCESS")}
-                  disabled={!isWsConnected || !((session?.round1WinnerId === session?.hostId ? session?.hostMent : session?.guestMent))}
+                  disabled={
+                    !isWsConnected ||
+                    session?.status !== "VOTING_ROUND_2" ||
+                    !(
+                      session?.round1WinnerId === session?.hostId
+                        ? session?.hostMent
+                        : session?.guestMent
+                    )
+                  }
                   className="bg-pink-500 text-white px-8 py-4 rounded-2xl border-4 border-black font-black text-xl shadow-[6px_6px_0px_rgba(0,0,0,0.3)] hover:translate-y-1 active:translate-y-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   💖 성공! ({voteCounts.voteA})
                 </button>
                 <button
                   onClick={() => handleVote(undefined, "FAIL")}
-                  disabled={!isWsConnected || !((session?.round1WinnerId === session?.hostId ? session?.hostMent : session?.guestMent))}
+                  disabled={
+                    !isWsConnected ||
+                    session?.status !== "VOTING_ROUND_2" ||
+                    !(
+                      session?.round1WinnerId === session?.hostId
+                        ? session?.hostMent
+                        : session?.guestMent
+                    )
+                  }
                   className="bg-gray-500 text-white px-8 py-4 rounded-2xl border-4 border-black font-black text-xl shadow-[6px_6px_0px_rgba(0,0,0,0.3)] hover:translate-y-1 active:translate-y-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   💔 실패... ({voteCounts.voteB})
@@ -528,14 +743,18 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
                     <span>{player.label}</span>
                     <button
                       onClick={() => handleVote(player.targetId, player.fallbackVote)}
-                      disabled={!isWsConnected || !player.targetId}
+                      disabled={
+                        !isWsConnected ||
+                        !player.targetId ||
+                        session?.status !== "VOTING_ROUND_1"
+                      }
                       className="bg-white text-black px-4 py-1.5 rounded-full text-sm font-black border-2 border-black hover:bg-gray-100 disabled:opacity-50 active:scale-95 transition-transform"
                     >
                       👍 투표 {player.currentVotes}
                     </button>
                   </div>
                   <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-[3] p-4 border-b-4 border-black flex items-center justify-center min-h-0">
+                    <div className="flex-[4] p-4 border-b-4 border-black flex items-center justify-center min-h-0">
                       <div className="w-full h-full rounded-xl border-3 border-black bg-white overflow-hidden">
                         {player.previewUrl ? (
                           <img
@@ -550,7 +769,13 @@ export function BattleSessionView({ sessionId }: BattleSessionViewProps) {
                         )}
                       </div>
                     </div>
-                    {/* Round 1 Ment (Optional or Hidden) */}
+                    <div className="flex-[0.7] p-3 bg-yellow-50 border-t-4 border-black text-sm font-bold text-gray-800 whitespace-pre-wrap">
+                      {player.ment ? (
+                        player.ment
+                      ) : (
+                        <span className="text-gray-400">아직 멘트가 등록되지 않았습니다.</span>
+                      )}
+                    </div>
                   </div>
                 </section>
               );

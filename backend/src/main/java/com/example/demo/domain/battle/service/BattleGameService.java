@@ -10,6 +10,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
+import org.springframework.context.annotation.Lazy;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +20,8 @@ public class BattleGameService {
     private final SimpMessagingTemplate messagingTemplate;
     private final MemberRepository memberRepository;
     private final BattleRoomService battleRoomService;
+    @Lazy
+    private final BattleTimerService battleTimerService;
 
     // 1. 라운드 2 시작 (1라운드 결과 정산 및 승자 결정 -> 승자/패자 DB 업데이트)
     @Transactional
@@ -134,6 +137,7 @@ public class BattleGameService {
         // Redis에서 직접 조회 시 NPE 방지
         Long hostId = getLong(sessionKey, "hostId");
         Long guestId = getLong(sessionKey, "guestId");
+        Long winnerId = getLong(sessionKey, "round1WinnerId");
 
         if (hostId == null || guestId == null) {
              throw new IllegalArgumentException("배틀 방 정보가 유효하지 않습니다.");
@@ -152,6 +156,15 @@ public class BattleGameService {
                 "/topic/battle/" + sessionId,
                 Map.of("type", "SESSION", "session", snapshot)
         );
+
+        // Round2 timer starts only after round1 winner submits ment.
+        if (winnerId != null && memberId.equals(winnerId)) {
+            Object statusObj = redisTemplate.opsForHash().get(sessionKey, "status");
+            String status = statusObj != null ? statusObj.toString() : null;
+            if (!"VOTING_ROUND_2".equals(status) && !"END".equals(status)) {
+                battleTimerService.startRound2Timer(sessionId);
+            }
+        }
     }
 
     private Long getLong(String key, String field) {

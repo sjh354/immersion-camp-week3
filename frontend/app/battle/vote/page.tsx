@@ -30,6 +30,7 @@ interface LobbyResponse {
   guestVoteCount?: number | null;
   status?: string | null;
   remainingSeconds?: number | null;
+  spectatorCount?: number | null;
 }
 
 const mapLobbySession = (session: LobbyResponse): BattleSessionSummary => ({
@@ -45,6 +46,7 @@ const mapLobbySession = (session: LobbyResponse): BattleSessionSummary => ({
   remainingSeconds: session.remainingSeconds ?? undefined,
   voteA: session.hostVoteCount ?? 0,
   voteB: session.guestVoteCount ?? 0,
+  spectatorCount: session.spectatorCount ?? 0,
 });
 
 const formatSeconds = (seconds?: number) => {
@@ -268,7 +270,7 @@ export default function BattleVoteRoute() {
                               1,
                               (session.voteA ?? 0) + (session.voteB ?? 0),
                             )) *
-                            100,
+                          100,
                         )}
                         % ({session.voteA ?? 0}표)
                       </span>
@@ -279,12 +281,12 @@ export default function BattleVoteRoute() {
                               1,
                               (session.voteA ?? 0) + (session.voteB ?? 0),
                             )) *
-                            100,
+                          100,
                         )}
                         % ({session.voteB ?? 0}표)
                       </span>
                     </div>
-                    <div className="h-3 w-full rounded-full border-3 border-black bg-white overflow-hidden">
+                    <div className="h-3 w-full rounded-full border-3 border-black bg-black overflow-hidden">
                       <div
                         className="h-full bg-pink-500"
                         style={{
@@ -294,7 +296,7 @@ export default function BattleVoteRoute() {
                                 1,
                                 (session.voteA ?? 0) + (session.voteB ?? 0),
                               )) *
-                              100,
+                            100,
                           )}%`,
                         }}
                       />

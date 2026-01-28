@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import com.example.demo.domain.battle.dto.BattleMessage;
 @Service
 public class BattleTimerService {
+    private static final int ROUND_DURATION_SECONDS = 60;
+
     private final RedisTemplate<String, Object> redisTemplate;
     private final SimpMessagingTemplate messagingTemplate;
     private final BattleGameService gameService;
@@ -29,22 +31,27 @@ public class BattleTimerService {
                 .type(BattleMessage.MessageType.START)
                 .sessionId(sessionId)
                 .content("배틀이 시작되었습니다!")
-                .remainingSeconds(60L)
+                .remainingSeconds((long) ROUND_DURATION_SECONDS)
                 .build();
         messagingTemplate.convertAndSend("/topic/battle/" + sessionId, startMsg);
 
         // Round 1
         redisTemplate.opsForHash().put(sessionKey, "status", "VOTING_ROUND_1");
-        setRoundEndTime(sessionKey, 60);
-        runTimer(sessionId, 60); 
+        setRoundEndTime(sessionKey, ROUND_DURATION_SECONDS);
+        runTimer(sessionId, ROUND_DURATION_SECONDS); 
 
         // Round 2 전환
         gameService.transitionToRound2(sessionId);
-        redisTemplate.opsForHash().put(sessionKey, "status", "VOTING_ROUND_2");
-        setRoundEndTime(sessionKey, 60);
-        runTimer(sessionId, 60);
+        redisTemplate.opsForHash().put(sessionKey, "status", "WAITING_MENT");
+    }
 
-        // 종료
+    @Async
+    @SuppressWarnings("null")
+    public void startRound2Timer(Long sessionId) {
+        String sessionKey = "battle:session:" + sessionId;
+        redisTemplate.opsForHash().put(sessionKey, "status", "VOTING_ROUND_2");
+        setRoundEndTime(sessionKey, ROUND_DURATION_SECONDS);
+        runTimer(sessionId, ROUND_DURATION_SECONDS);
         gameService.endGame(sessionId);
     }
 

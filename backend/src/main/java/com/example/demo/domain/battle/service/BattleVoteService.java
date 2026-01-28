@@ -23,6 +23,14 @@ public class BattleVoteService {
                 // ignore
             }
         }
+        Object statusObj = redisTemplate.opsForHash().get(sessionKey, "status");
+        String status = statusObj != null ? statusObj.toString() : null;
+        if (currentRound == 1 && !"VOTING_ROUND_1".equals(status)) {
+            return false;
+        }
+        if (currentRound == 2 && !"VOTING_ROUND_2".equals(status)) {
+            return false;
+        }
 
         // 2. 투표 기록 키 (User별 투표 내역 저장)
         String voteRecordKey = "battle:vote_record:" + sessionId + ":" + currentRound;

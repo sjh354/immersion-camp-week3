@@ -37,7 +37,7 @@ export function ResultPage({
   onBack,
 }: ResultPageProps) {
   // 최종 결과 결정: 승자가 아니거나, 승자이지만 애프터 실패한 경우 패배
-  const finalSuccess = isWinner && isAfterSuccess;
+  const finalSuccess = isAfterSuccess;
 
   return (
     <div className="h-screen bg-gradient-to-br from-purple-200 via-pink-200 to-yellow-200 relative overflow-hidden flex flex-col">
@@ -82,7 +82,7 @@ export function ResultPage({
                 className="text-6xl font-black text-center mb-8 text-pink-600 [text-shadow:_4px_4px_0_rgb(255_255_255)]"
                 style={{ fontFamily: "Impact, fantasy" }}
               >
-                🎉 승리! 🎉
+                {isWinner ? "🎉 승리! 🎉" : "😢 패배... 😢"}
               </h2>
 
               <div className="bg-white p-8 rounded-2xl border-6 border-black shadow-[8px_8px_0px_rgba(0,0,0,0.3)] mb-8">
